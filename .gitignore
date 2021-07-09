@@ -1,0 +1,4 @@
+*.nc
+*.ipynb_checkpoints*
+Untitled*.ipynb
+grb_data/
