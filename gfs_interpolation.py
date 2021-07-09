@@ -102,6 +102,39 @@ def generate_regridding_files(
 
 
 
+def open_gfs_file(gfs_file):
+
+    if "https://" in gfs_file or "http://" in gfs_file:
+        # assume we are working with data from an OpenDAP server
+        pressure_xr = xr.Dataset()
+        surface_xr = xr.Dataset()
+        with xr.open_dataset(gfs_file) as fin:
+            # translate the dimension name to a grib-like name
+            frename = fin.rename({"isobaric1" : "isobaricInhPa"}).squeeze()
+
+            # translate variables to have grib-like names
+            pressure_xr['u'] = frename['u-component_of_wind_isobaric']
+            pressure_xr['v'] = frename['v-component_of_wind_isobaric']
+            pressure_xr['t'] = frename['Temperature_isobaric']
+            pressure_xr['q'] = frename['Specific_humidity_isobaric']
+
+
+            surface_xr['sp'] = frename['Pressure_surface']
+            surface_xr['t'] = frename['Temperature_surface']
+            surface_xr['orog'] = frename['Geopotential_height_surface']
+    
+        # remove any excess dimensions
+        pressure_xr = pressure_xr.squeeze()
+        surface_xr = surface_xr.squeeze()
+    else:
+        # assume we are working with a grib file
+        # open the grib file twice: once for the pressure-level group and once for the surface group
+        filter_dict = {'typeOfLevel': 'isobaricInhPa'}
+        pressure_xr = xr.open_dataset(gfs_file, engine = 'cfgrib', filter_by_keys = filter_dict)
+        filter_dict = {'typeOfLevel': 'surface'}
+        surface_xr = xr.open_dataset(gfs_file, engine = 'cfgrib', filter_by_keys = filter_dict)
+    
+    return pressure_xr, surface_xr
 
 
 def interpolate_gfs_to_regcm(
@@ -133,11 +166,8 @@ def interpolate_gfs_to_regcm(
 
             Raises an error if the date from the GFS forecast doesn't exist in the ICBC file.
     """
-    # open the grib file twice: once for the pressure-level group and once for the surface group
-    filter_dict = {'typeOfLevel': 'isobaricInhPa'}
-    pressure_xr = xr.open_dataset(gfs_file, engine = 'cfgrib', filter_by_keys = filter_dict)
-    filter_dict = {'typeOfLevel': 'surface'}
-    surface_xr = xr.open_dataset(gfs_file, engine = 'cfgrib', filter_by_keys = filter_dict)
+    # open the GFS file; wraps xarray to allow handling of http URLs
+    pressure_xr, surface_xr = open_gfs_file(gfs_file)
 
     # generate regridding weights
     regridders = generate_regridding_files(surface_xr, icbc_file, method = method, overwrite_weights = overwrite_weights)
@@ -213,7 +243,7 @@ def interpolate_gfs_to_regcm(
 
 if __name__ == "__main__":
 
-    gfs_file = "grb_data/gfs_4_20210625_0000_000.grb2"
+    gfs_file = "https://www.ncei.noaa.gov/thredds/dodsC/model-gfs-g4-anl-files/202106/20210628/gfs_4_20210628_0000_000.grb2"
     icbc_file = "fog_ctd_control_ICBC.2021060100.nc"
     method = 'bilinear'
 
