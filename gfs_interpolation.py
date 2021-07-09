@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from generate_icbc_from_template import generate_icbc_from_template
 import xarray as xr
 import netCDF4 as nc
 import cftime
@@ -8,6 +9,10 @@ import pandas as pd
 import xesmf
 import os
 import interpolation.verticalInterpolation as vint
+
+# turn off warnings
+import warnings
+warnings.filterwarnings("ignore")
 
 cₚ = 1004.
 cᵥ = 717.
@@ -103,6 +108,7 @@ def generate_regridding_files(
 
 
 def open_gfs_file(gfs_file):
+    """Opens a local or remote GFS file."""
 
     if "https://" in gfs_file or "http://" in gfs_file:
         # assume we are working with data from an OpenDAP server
@@ -117,7 +123,7 @@ def open_gfs_file(gfs_file):
             pressure_xr['v'] = frename['v-component_of_wind_isobaric']
             pressure_xr['t'] = frename['Temperature_isobaric']
             pressure_xr['q'] = frename['Specific_humidity_isobaric']
-
+            pressure_xr['isobaricInhPa'] = frename['isobaricInhPa']/100
 
             surface_xr['sp'] = frename['Pressure_surface']
             surface_xr['t'] = frename['Temperature_surface']
@@ -194,7 +200,7 @@ def interpolate_gfs_to_regcm(
         p_rcm = (ps_rcm.values[np.newaxis,:,:] - pₜ)*σ + pₜ
 
 
-    # set the pressure levels to which to interpolate
+    # set the pressure levels from which to interpolate
     plevs = pressure_xr['isobaricInhPa'].values * 100
 
     # map the GFS variable names to RegCM variable names
@@ -241,10 +247,71 @@ def interpolate_gfs_to_regcm(
         fio.variables['ps'][itime,...] = pₛ_rcm.values / 100 # also convert to hPa
         fio.variables['ts'][itime,...] = tₛ_rcm.values
 
+
+def generate_gfs_icbc(
+    icbc_template_file,
+    start_date,
+    end_date,
+    steps_per_day = 4,
+    gfs_path_template = "https://www.ncei.noaa.gov/thredds/dodsC/model-gfs-g4-anl-files/{year:04}{month:02}/{year:04}{month:02}{day:02}/gfs_4_{year:04}{month:02}{day:02}_{hour:04}_000.grb2",
+    method = 'bilinear',
+    overwrite_weights = False,
+):
+    """Generates ICBC files for RegCM from the GFS forecast.
+
+        input:
+        ------
+
+            icbc_template_file  : the path to an ICBC file generated for the intended RegCM domain
+            
+            start_date          : a datetime object giving the initial date for which to create ICBCs
+
+            end_date            : a datetime object giving the end date (exclusive) for which to create ICBCs
+
+            steps_per_day       : the number of ICBC steps per day (default is almost always correct)
+
+            gfs_path_template   : a template for a file path or URL that will direct to a GFS file
+                                  The template needs to be able to use string.format() with the fields 
+                                  year, month, and day.
+
+            method              : the regridding method (see xesmf.Regridder()) 
+
+            overwrite_weights   : flag whether to overwrite the regridding weights 
+                                  (they are reused if they exist otherwise)
+
+        output:
+        -------
+
+            icbc_file_paths : the absolute paths to the ICBC files produced by this routine
+
+    """
+
+    interval = int(24/steps_per_day)
+    # set the range of dates for which to run the ICBC creation (excluding the last date)
+    dates = pd.date_range(start_date, end_date, freq = f"{interval}H").to_pydatetime()[:-1]
+
+    icbc_files = []
+    # loop over dates
+    for date in dates:
+        print(date)
+        # set the GFS file for this date
+        gfs_file = gfs_path_template.format(year = date.year, month = date.month, day = date.day, hour = date.hour*100)
+
+        # set/create the ICBC file for this month (don't clobber so that we can run this for each date in the month)
+        icbc_file = generate_icbc_from_template(icbc_template_file,date.year, date.month, steps_per_day, clobber = False, zero_data = True)
+        icbc_files.append(icbc_file)
+
+        # regrids into that ICBC file
+        interpolate_gfs_to_regcm(gfs_file, icbc_file)
+        
+    # return the list of ICBC files
+    return list(sorted(set(icbc_files)))
+
 if __name__ == "__main__":
+    import datetime as dt
 
-    gfs_file = "https://www.ncei.noaa.gov/thredds/dodsC/model-gfs-g4-anl-files/202106/20210628/gfs_4_20210628_0000_000.grb2"
-    icbc_file = "fog_ctd_control_ICBC.2021060100.nc"
-    method = 'bilinear'
+    icbc_template_file = "fog_ctd_control_ICBC.2000040100.nc"
+    start_date = dt.datetime(2021,6,27)
+    end_date = dt.datetime(2021,6,28)
 
-    interpolate_gfs_to_regcm(gfs_file, icbc_file)
+    generate_gfs_icbc(icbc_template_file, start_date, end_date)

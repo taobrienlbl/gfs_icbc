@@ -5,6 +5,7 @@ import datetime as dt
 import calendar
 import cftime
 import pandas as pd
+import numpy as np
 import os
 
 def generate_icbc_from_template(
@@ -12,7 +13,9 @@ def generate_icbc_from_template(
     icbc_year,
     icbc_month,
     steps_per_day = 4,
-    output_file_pattern = None
+    output_file_pattern = None,
+    clobber = False,
+    zero_data = False,
 ):
     """Generates a RegCM ICBC file, given a template file from the intended run (need to have run icbc previously for this domain).
 
@@ -28,6 +31,10 @@ def generate_icbc_from_template(
             steps_per_day       : the number of ICBC steps per day (default is almost always correct)
             
             output_file_pattern : the pattern to use for generating ICBC file names; the input ICBC file's pattern is used as default
+
+            clobber             : flags whether to clobber an existing file (simply returns if the file exists otherwise)
+
+            zero_data           : flags whether to zero-out the ICBC fields
 
         output:
         -------
@@ -45,6 +52,10 @@ def generate_icbc_from_template(
         output_file_name = output_file_pattern.format(year = int(icbc_year), month = int(icbc_month))
     except:
         raise RuntimeError("`output_file_name` must have the print template fields `year` and `month`, and icbc_year and icbc_month must be numbers")
+
+    # simply return if the file already exists and we aren't clobbering
+    if not clobber:
+        if os.path.exists(output_file_name): return output_file_name
 
     # create the output file
     shutil.copy(icbc_template_file, output_file_name)
@@ -75,6 +86,11 @@ def generate_icbc_from_template(
 
         # write the times (this adjusts the # of timesteps in the file)
         fio.variables['time'][:] = times
+
+        # zero-out the ICBC fields
+        if zero_data:
+            for var in ["ts", "ps", "u", "v", "t", "qv"]:
+                fio.variables[var][:] = np.zeros(np.shape(fio.variables[var]))
 
     return os.path.abspath(output_file_name)
 
