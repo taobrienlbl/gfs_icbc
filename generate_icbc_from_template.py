@@ -39,7 +39,7 @@ def generate_icbc_from_template(
     """
 
     if output_file_pattern is None:
-        output_file_pattern = f"{os.path.basename(icbc_template_file).split('.')[0]}{{year:04}}{{month:02}}0100.nc"
+        output_file_pattern = f"{os.path.basename(icbc_template_file).split('.')[0]}.{{year:04}}{{month:02}}0100.nc"
 
     try:
         output_file_name = output_file_pattern.format(year = int(icbc_year), month = int(icbc_month))
