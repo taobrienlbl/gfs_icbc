@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+from gfs_icbc.interpolation import verticalInterpolation as vint
 import os
 import shutil
 import calendar
@@ -9,7 +10,7 @@ import cftime
 import numpy as np
 import pandas as pd
 import xesmf
-import interpolation.verticalInterpolation as vint
+import datetime as dt
 
 # turn off warnings
 import warnings
