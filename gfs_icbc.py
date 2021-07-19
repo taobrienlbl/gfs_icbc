@@ -377,7 +377,7 @@ def generate_gfs_icbc(
 
     interval = int(24/steps_per_day)
     # set the range of dates for which to run the ICBC creation (excluding the last date)
-    dates = pd.date_range(start_date, end_date, freq = f"{interval}H").to_pydatetime()[:-1]
+    dates = pd.date_range(start_date, end_date, freq = f"{interval}H").to_pydatetime()
 
     icbc_files = []
     # loop over dates
