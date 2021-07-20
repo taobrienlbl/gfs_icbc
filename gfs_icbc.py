@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-from gfs_icbc.interpolation import verticalInterpolation as vint
+try:
+    from gfs_icbc.interpolation import verticalInterpolation as vint
+except:
+    from interpolation import verticalInterpolation as vint
+
 import os
 import shutil
 import calendar
